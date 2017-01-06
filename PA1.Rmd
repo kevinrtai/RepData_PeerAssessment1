@@ -1,0 +1,92 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+This is the first Peer Assessment of the Reproducible Research course offered by Johns Hopkins University through Coursera. We will be looking at data collected from activity monitoring devices such as Fitbit, Nike Fuelband, and Jawbone Up. For more information on the course, visit [Reproducible Research](https://www.coursera.org/learn/reproducible-research)
+
+## Loading and preprocessing the data
+First we need to read and preprocess the data into a dataframe with proper date variables.
+
+```{r, message=F, warning=F}
+library('lubridate')
+unzip('activity.zip')
+activity <- read.csv('activity.csv')
+activity <- transform(activity, date=ymd(date))
+head(activity)
+```
+
+
+## What is mean total number of steps taken per day?
+First, let's visualize the total number of steps taken each day using a histogram.
+
+```{r}
+library('ggplot2')
+sum_by_day <- tapply(activity$steps, activity$date, sum, na.rm=TRUE)
+qplot(sum_by_day, binwidth=400) + xlab('Total Steps per Day') +
+  ylab('Frequency')
+```
+
+We can also find the mean and median number of steps per day.
+
+```{r}
+mean(sum_by_day, na.rm=TRUE)
+median(sum_by_day, na.rm=TRUE)
+```
+
+
+## What is the average daily activity pattern?
+We'd also like to discover the average distribution of activity over the course of a day. We can accomplish this by grouping and averaging across the interval column instead of the date column.
+
+```{r}
+mean_by_interval <- tapply(activity$steps, activity$interval, mean, na.rm=TRUE)
+interval_col <-as.numeric(as.character(row.names(mean_by_interval)))
+interval_df <- data.frame(interval_col, mean_by_interval, row.names=NULL)
+names(interval_df) <- c('interval', 'mean')
+ggplot(interval_df, aes(interval, mean, group=1)) + geom_line() +
+  theme(axis.text.x=element_blank())
+```
+
+We'd now like to identify the interval with the largest average number of steps. This turns out to be interval 08:35.
+
+```{r}
+interval_df[interval_df$mean == max(interval_df$mean), ]
+```
+
+## Imputing missing values
+Let's find out how many missing values there are in the dataset.
+
+```{r}
+summary(activity$steps)
+```
+
+There are 2304 NA's. We would like to fill in these missing values. We can do so by filling them in with the mean number of steps across the entire dataset.
+
+```{r}
+activity_imputed <- transform(activity, steps=ifelse(is.na(steps), mean(steps, na.rm=TRUE), steps))
+```
+
+Let's repeat the histogram from earlier, as well as the mean/median calculation.
+
+```{r}
+sum_by_day_imputed <- tapply(activity_imputed$steps, activity_imputed$date, sum, na.rm=TRUE)
+qplot(sum_by_day_imputed, binwidth=400) + xlab('Total Steps per Day') +
+  ylab('Frequency')
+mean(sum_by_day_imputed)
+median(sum_by_day_imputed)
+```
+
+As we can see, this method of imputation seems to affect both the mean and median significantly by pushing it upward.
+
+## Are there differences in activity patterns between weekdays and weekends?
+Let's see how the activity pattern changes between weekdays and weekends.
+
+```{r}
+activity_imputed <- transform(activity_imputed, weekday=factor(ifelse(weekdays(date) %in% c('Saturday', 'Sunday'), 'weekend', 'weekday')))
+mean_by_interval_imputed <- aggregate(data=activity_imputed, steps ~ interval + weekday, mean)
+ggplot(mean_by_interval_imputed, aes(interval, steps)) + geom_line() + facet_grid(weekday ~ .)
+```
+
+It looks as though this person tends to be more active on weekdays than weekends, or sometimes gets a late start on their workout.
